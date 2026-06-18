@@ -1,0 +1,127 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "brightspace",
+  "title": "Brightspace",
+  "description": "View Assignments, Courses and Quizzes",
+  "icon": "extension-icon.png",
+  "author": "daniel_grbac_bravo",
+  "platforms": [
+    "Windows",
+    "macOS"
+  ],
+  "categories": [
+    "Communication"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "mode": "view",
+      "name": "login-rug",
+      "title": "University of Groningen Login",
+      "description": "Save RUG credentials and create a Brightspace session"
+    },
+    {
+      "mode": "view",
+      "name": "my-courses",
+      "title": "Courses",
+      "description": "Show enrolled courses and browse content"
+    },
+    {
+      "mode": "view",
+      "name": "announcements",
+      "title": "Announcements",
+      "description": "Show recent course announcements"
+    },
+    {
+      "mode": "view",
+      "name": "due-next",
+      "title": "What's Due Next",
+      "description": "Show upcoming assignments and quizzes"
+    },
+    {
+      "mode": "view",
+      "name": "course-content",
+      "title": "Course Content",
+      "description": "Compatibility entry for merged course browser",
+      "hidden": true
+    },
+    {
+      "mode": "view",
+      "name": "assignments",
+      "title": "Assignments",
+      "description": "Show assignment folders and due dates"
+    },
+    {
+      "mode": "view",
+      "name": "quizzes",
+      "title": "Quizzes",
+      "description": "Show quizzes, availability, and due dates"
+    },
+    {
+      "mode": "view",
+      "name": "grades",
+      "title": "Grades",
+      "description": "Show visible grade values"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "tenantUrl",
+      "title": "Tenant URL",
+      "description": "Brightspace tenant URL, for example https://brightspace.rug.nl",
+      "type": "textfield",
+      "required": true,
+      "default": "https://brightspace.rug.nl"
+    },
+    {
+      "name": "cookieHeader",
+      "title": "Cookie Header",
+      "description": "Authenticated Brightspace Cookie header value from a browser session",
+      "type": "password",
+      "required": false
+    },
+    {
+      "name": "bearerToken",
+      "title": "Bearer Token",
+      "description": "Optional OAuth access token. Used instead of cookies when present.",
+      "type": "password",
+      "required": false
+    },
+    {
+      "name": "lpVersion",
+      "title": "LP API Version",
+      "description": "Optional override. Leave empty to discover from /d2l/api/versions/.",
+      "type": "textfield",
+      "required": false
+    },
+    {
+      "name": "leVersion",
+      "title": "LE API Version",
+      "description": "Optional override. Leave empty to discover from /d2l/api/versions/.",
+      "type": "textfield",
+      "required": false
+    }
+  ],
+  "tools": [],
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint",
+    "prepublishOnly": "echo \"\\n\\nIt seems like you are trying to publish the Raycast extension to npm.\\n\\nIf you did intend to publish it to npm, remove the \\`prepublishOnly\\` script and rerun \\`npm publish\\` again.\\nIf you wanted to publish it to the Raycast Store instead, use \\`npm run publish\\` instead.\\n\\n\" && exit 1",
+    "publish": "npx @raycast/api@latest publish"
+  },
+  "dependencies": {
+    "@raycast/api": "^1.103.0",
+    "@raycast/utils": "^2.2.1",
+    "run": "^1.5.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.0.4",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "eslint": "^9.22.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2"
+  }
+}
