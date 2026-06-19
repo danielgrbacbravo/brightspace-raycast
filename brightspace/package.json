@@ -22,6 +22,12 @@
     },
     {
       "mode": "view",
+      "name": "dashboard",
+      "title": "Dashboard",
+      "description": "Show Brightspace updates, due work, feedback, and shortcuts"
+    },
+    {
+      "mode": "view",
       "name": "my-courses",
       "title": "Courses",
       "description": "Show enrolled courses and browse content"

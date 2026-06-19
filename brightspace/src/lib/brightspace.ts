@@ -213,6 +213,17 @@ export interface NewsItem {
   SortOrder?: number;
 }
 
+export interface CourseUpdate {
+  OrgUnitId?: number;
+  OrgUnitName?: string;
+  UpdateType?: string;
+  UpdateTypeName?: string;
+  Name?: string;
+  Count?: number;
+  LastModified?: string | null;
+  LastModifiedDate?: string | null;
+}
+
 interface Page<T> {
   Items?: T[];
   Objects?: T[];
@@ -335,6 +346,16 @@ export class BrightspaceClient {
     return this.request<GradeValue[]>(
       `/d2l/api/le/${await this.getLeVersion()}/${courseId}/grades/values/myGradeValues/`,
     );
+  }
+
+  async getMyUpdates(): Promise<CourseUpdate[]> {
+    const response = await this.request<Page<CourseUpdate> | CourseUpdate[]>(
+      `/d2l/api/le/${await this.getLeVersion()}/updates/myUpdates/`,
+    );
+
+    return Array.isArray(response)
+      ? response
+      : (response.Objects ?? response.Items ?? []);
   }
 
   async getMyDueDateEvents(options: {
