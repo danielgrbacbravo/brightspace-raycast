@@ -98,11 +98,8 @@ function tableToMarkdown(tableHtml: string, baseUrl: string): string {
     ...row,
     ...Array.from({ length: width - row.length }, () => ""),
   ]);
-  const hasHeader = /<th\b/i.test(rowsHtml(tableHtml)[0] ?? "");
-  const header = hasHeader
-    ? normalizedRows[0]
-    : normalizedRows[0].map((_, index) => `Column ${index + 1}`);
-  const body = hasHeader ? normalizedRows.slice(1) : normalizedRows;
+  const header = normalizedRows[0];
+  const body = normalizedRows.slice(1);
 
   if (width === 1) {
     return ["", ...normalizedRows.map((row) => `- ${row[0]}`), ""].join("\n");
@@ -152,12 +149,6 @@ function cleanTableCell(cellHtml: string, baseUrl: string): string {
     .replace(/<[^>]+>/g, "")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function rowsHtml(tableHtml: string): string[] {
-  return [...tableHtml.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map(
-    (match) => match[0],
-  );
 }
 
 function tableCell(value: string): string {

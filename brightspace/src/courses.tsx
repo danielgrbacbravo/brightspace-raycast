@@ -12,6 +12,7 @@ import { usePromise } from "@raycast/utils";
 import { useState } from "react";
 import { formatDate, type Course } from "./lib/brightspace";
 import { createAuthenticatedBrightspaceClient } from "./lib/client-factory";
+import { AuthenticatedCommand } from "./lib/rug-login-view";
 import {
   decorateCourses,
   getCourseSettings,
@@ -36,6 +37,14 @@ interface CourseData {
 }
 
 export default function Command() {
+  return (
+    <AuthenticatedCommand>
+      <CoursesView />
+    </AuthenticatedCommand>
+  );
+}
+
+function CoursesView() {
   const [filter, setFilter] = useState<CourseFilter>("focus");
   const { data, isLoading, revalidate } = usePromise(loadCourses);
   const visibleCourses = filterCourses(data?.courses ?? [], filter);

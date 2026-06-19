@@ -3,6 +3,7 @@ import {
   ActionPanel,
   Color,
   Form,
+  Icon,
   List,
   Toast,
   showToast,
@@ -12,9 +13,11 @@ import { usePromise } from "@raycast/utils";
 import { useMemo, useState } from "react";
 import {
   type Course,
+  type GradeValue,
   type NewsItem,
   type RichText,
   type UserData,
+  formatGrade,
 } from "./lib/brightspace";
 import { createAuthenticatedBrightspaceClient } from "./lib/client-factory";
 import {
@@ -30,6 +33,7 @@ import {
   htmlToMarkdown,
   stripHtml,
 } from "./lib/markdown";
+import { AuthenticatedCommand } from "./lib/rug-login-view";
 
 const ALL_COURSES = "__all__";
 const ANNOUNCEMENT_LOOKBACK_DAYS = 90;
@@ -45,14 +49,23 @@ const ANNOUNCEMENT_GROUP_ORDER = [
 ];
 
 interface AnnouncementRecord {
+  type: "announcement";
   course: AnnouncementCourse;
   item: NewsItem;
   authorName?: string;
 }
 
+interface GradeUpdateRecord {
+  type: "grade";
+  course: AnnouncementCourse;
+  grade: GradeValue;
+}
+
+type FeedRecord = AnnouncementRecord | GradeUpdateRecord;
+
 interface AnnouncementGroup {
   title: string;
-  records: AnnouncementRecord[];
+  records: FeedRecord[];
 }
 
 type AnnouncementCourse = Course & Partial<DecoratedCourse>;
@@ -63,6 +76,14 @@ interface AnnouncementAuthors {
 }
 
 export default function Command() {
+  return (
+    <AuthenticatedCommand>
+      <AnnouncementsCommand />
+    </AuthenticatedCommand>
+  );
+}
+
+function AnnouncementsCommand() {
   const [selectedCourseId, setSelectedCourseId] = useState<string>(ALL_COURSES);
   const {
     data: courses,
@@ -133,10 +154,16 @@ function AnnouncementsView({
           return [];
         }
 
-        const items = await client.getCourseNews(courseId, { since });
+        const [items, grades] = await Promise.all([
+          client.getCourseNews(courseId, { since }),
+          loadCourseGradeUpdates(client, course, since),
+        ]);
         const responses = [{ course, items }];
         const authors = await loadAnnouncementAuthors(client, responses);
-        return normalizeAnnouncements(responses, authors);
+        return sortFeedRecords([
+          ...normalizeAnnouncements(responses, authors),
+          ...grades,
+        ]);
       }
 
       const responses = await Promise.all(
@@ -145,9 +172,19 @@ function AnnouncementsView({
           items: await client.getCourseNews(course.id, { since }),
         })),
       );
+      const grades = (
+        await Promise.all(
+          loadedCourses.map((course) =>
+            loadCourseGradeUpdates(client, course, since),
+          ),
+        )
+      ).flat();
       const authors = await loadAnnouncementAuthors(client, responses);
 
-      return normalizeAnnouncements(responses, authors);
+      return sortFeedRecords([
+        ...normalizeAnnouncements(responses, authors),
+        ...grades,
+      ]);
     },
     [selectedCourseId, courses],
     { execute: courses.length > 0 },
@@ -185,13 +222,20 @@ function AnnouncementsView({
       ) : null}
       {groupAnnouncements(data ?? []).map((group) => (
         <List.Section key={group.title} title={group.title}>
-          {group.records.map((record) => (
-            <AnnouncementItem
-              key={`${record.course.id}-${record.item.Id}`}
-              record={record}
-              onCourseLabelChanged={onCourseLabelsChanged}
-            />
-          ))}
+          {group.records.map((record) =>
+            record.type === "announcement" ? (
+              <AnnouncementItem
+                key={`${record.course.id}-announcement-${record.item.Id}`}
+                record={record}
+                onCourseLabelChanged={onCourseLabelsChanged}
+              />
+            ) : (
+              <GradeUpdateItem
+                key={`${record.course.id}-grade-${String(record.grade.GradeObjectIdentifier)}`}
+                record={record}
+              />
+            ),
+          )}
         </List.Section>
       ))}
     </List>
@@ -210,6 +254,7 @@ function AnnouncementItem({
 
   return (
     <List.Item
+      icon={Icon.Newspaper}
       title={item.Title}
       accessories={announcementAccessories(record)}
       detail={<List.Item.Detail markdown={detail} />}
@@ -230,6 +275,35 @@ function AnnouncementItem({
           <Action.CopyToClipboard
             title="Copy Announcement ID"
             content={String(item.Id)}
+          />
+        </ActionPanel>
+      }
+    />
+  );
+}
+
+function GradeUpdateItem({ record }: { record: GradeUpdateRecord }) {
+  const { course, grade } = record;
+  const detail = gradeUpdateMarkdown(record);
+  const gradeText = formatGrade(grade);
+  const points = gradePoints(grade);
+
+  return (
+    <List.Item
+      title={`${grade.GradeObjectName ?? "Unnamed grade item"} updated`}
+      accessories={[
+        { text: courseLabel(course), tooltip: course.name },
+        { tag: { value: gradeText, color: gradeColor(grade) } },
+      ]}
+      detail={<List.Item.Detail markdown={detail} />}
+      actions={
+        <ActionPanel>
+          {course.url ? (
+            <Action.OpenInBrowser title="Open Course" url={course.url} />
+          ) : null}
+          <Action.CopyToClipboard
+            title="Copy Grade"
+            content={points ? `${gradeText} (${points})` : gradeText}
           />
         </ActionPanel>
       }
@@ -316,6 +390,7 @@ function normalizeAnnouncements(
       }
 
       records.push({
+        type: "announcement",
         course,
         item,
         authorName: authorNameFor(course, item, authors),
@@ -326,13 +401,32 @@ function normalizeAnnouncements(
   return records.sort(compareAnnouncements);
 }
 
-function groupAnnouncements(
-  records: AnnouncementRecord[],
-): AnnouncementGroup[] {
-  const groups = new Map<string, AnnouncementRecord[]>();
+async function loadCourseGradeUpdates(
+  client: Awaited<ReturnType<typeof createAuthenticatedBrightspaceClient>>,
+  course: AnnouncementCourse,
+  since: string,
+): Promise<GradeUpdateRecord[]> {
+  try {
+    const grades = await client.getMyGradeValues(course.id);
+    const sinceTime = new Date(since).getTime();
+
+    return grades
+      .filter((grade) => {
+        const date = gradeUpdateDate(grade);
+        const time = date ? new Date(date).getTime() : 0;
+        return time >= sinceTime && hasVisibleGrade(grade);
+      })
+      .map((grade) => ({ type: "grade", course, grade }));
+  } catch {
+    return [];
+  }
+}
+
+function groupAnnouncements(records: FeedRecord[]): AnnouncementGroup[] {
+  const groups = new Map<string, FeedRecord[]>();
 
   for (const record of records) {
-    const title = announcementGroupTitle(record.item);
+    const title = feedRecordGroupTitle(record);
     groups.set(title, [...(groups.get(title) ?? []), record]);
   }
 
@@ -342,8 +436,8 @@ function groupAnnouncements(
   });
 }
 
-function announcementGroupTitle(item: NewsItem): string {
-  const value = announcementDate(item);
+function feedRecordGroupTitle(record: FeedRecord): string {
+  const value = feedRecordDate(record);
   if (!value) {
     return "Older";
   }
@@ -428,6 +522,38 @@ function announcementMarkdown(record: AnnouncementRecord): string {
     .join("\n\n");
 }
 
+function gradeUpdateMarkdown(record: GradeUpdateRecord): string {
+  const { course, grade } = record;
+  const updated = formatCompactDate(gradeUpdateDate(grade));
+  const points = gradePoints(grade);
+  const comments = announcementBodyMarkdown(grade.Comments, course.url);
+  const privateComments = announcementBodyMarkdown(
+    grade.PrivateComments,
+    course.url,
+  );
+
+  return [
+    [updated ? `Updated ${updated}` : "", `Grade ${formatGrade(grade)}`]
+      .filter(Boolean)
+      .map((pill) => `\`${escapeMarkdown(pill)}\``)
+      .join(" "),
+    "",
+    `## ${escapeMarkdown(grade.GradeObjectName ?? "Unnamed grade item")}`,
+    "",
+    `Course: ${escapeMarkdown(course.name)}`,
+    `Grade: ${escapeMarkdown(formatGrade(grade))}`,
+    points ? `Points: ${escapeMarkdown(points)}` : "",
+    grade.GradeObjectTypeName
+      ? `Type: ${escapeMarkdown(grade.GradeObjectTypeName)}`
+      : "",
+    "",
+    comments ? `### Comments\n\n${comments}` : "",
+    privateComments ? `### Private Comments\n\n${privateComments}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 function announcementInfoPills(record: AnnouncementRecord): string {
   const created = formatCompactDate(record.item.CreatedDate);
   const pills = [
@@ -475,6 +601,84 @@ function announcementDate(item: NewsItem): string | undefined {
   );
 }
 
+function gradeUpdateDate(grade: GradeValue): string | undefined {
+  return grade.ReleasedDate ?? grade.LastModified ?? undefined;
+}
+
+function feedRecordDate(record: FeedRecord): string | undefined {
+  return record.type === "announcement"
+    ? announcementDate(record.item)
+    : gradeUpdateDate(record.grade);
+}
+
+function hasVisibleGrade(grade: GradeValue): boolean {
+  return (
+    Boolean(grade.DisplayedGrade) ||
+    typeof grade.PointsNumerator === "number" ||
+    typeof grade.WeightedNumerator === "number"
+  );
+}
+
+function gradePoints(grade: GradeValue): string | undefined {
+  if (
+    typeof grade.PointsNumerator === "number" &&
+    typeof grade.PointsDenominator === "number"
+  ) {
+    return `${formatNumber(grade.PointsNumerator)} / ${formatNumber(grade.PointsDenominator)} pts`;
+  }
+
+  if (
+    typeof grade.WeightedNumerator === "number" &&
+    typeof grade.WeightedDenominator === "number"
+  ) {
+    return `${formatNumber(grade.WeightedNumerator)} / ${formatNumber(grade.WeightedDenominator)} weighted`;
+  }
+
+  return undefined;
+}
+
+function gradeColor(grade: GradeValue): Color {
+  const percent = gradePercent(grade);
+
+  if (percent === undefined) {
+    return Color.Blue;
+  }
+
+  if (percent >= 90) {
+    return Color.Green;
+  }
+
+  if (percent >= 70) {
+    return Color.Yellow;
+  }
+
+  return Color.Red;
+}
+
+function gradePercent(grade: GradeValue): number | undefined {
+  if (
+    typeof grade.PointsNumerator === "number" &&
+    typeof grade.PointsDenominator === "number" &&
+    grade.PointsDenominator > 0
+  ) {
+    return (grade.PointsNumerator / grade.PointsDenominator) * 100;
+  }
+
+  if (
+    typeof grade.WeightedNumerator === "number" &&
+    typeof grade.WeightedDenominator === "number" &&
+    grade.WeightedDenominator > 0
+  ) {
+    return (grade.WeightedNumerator / grade.WeightedDenominator) * 100;
+  }
+
+  return undefined;
+}
+
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
 function formatCompactDate(value?: string | null): string | undefined {
   if (!value) {
     return undefined;
@@ -497,9 +701,24 @@ function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function announcementTimestamp(item: NewsItem): number {
-  const value = announcementDate(item);
+function feedRecordTimestamp(record: FeedRecord): number {
+  const value = feedRecordDate(record);
   return value ? new Date(value).getTime() : 0;
+}
+
+function sortFeedRecords(records: FeedRecord[]): FeedRecord[] {
+  return records.sort(compareFeedRecords);
+}
+
+function compareFeedRecords(a: FeedRecord, b: FeedRecord): number {
+  if (a.type === "announcement" && b.type === "announcement") {
+    return compareAnnouncements(a, b);
+  }
+
+  return (
+    feedRecordTimestamp(b) - feedRecordTimestamp(a) ||
+    feedRecordTitle(a).localeCompare(feedRecordTitle(b))
+  );
 }
 
 function compareAnnouncements(
@@ -508,9 +727,15 @@ function compareAnnouncements(
 ): number {
   return (
     Number(b.item.IsPinned) - Number(a.item.IsPinned) ||
-    announcementTimestamp(b.item) - announcementTimestamp(a.item) ||
+    feedRecordTimestamp(b) - feedRecordTimestamp(a) ||
     a.item.Title.localeCompare(b.item.Title)
   );
+}
+
+function feedRecordTitle(record: FeedRecord): string {
+  return record.type === "announcement"
+    ? record.item.Title
+    : (record.grade.GradeObjectName ?? "Unnamed grade item");
 }
 
 function compareCourses(a: DecoratedCourse, b: DecoratedCourse): number {

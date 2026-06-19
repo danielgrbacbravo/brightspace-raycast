@@ -29,6 +29,7 @@ import {
 } from "./lib/markdown";
 import { createAuthenticatedBrightspaceClient } from "./lib/client-factory";
 import { CoursesCommand } from "./my-courses";
+import { AuthenticatedCommand } from "./lib/rug-login-view";
 
 interface ContentSection {
   id: string;
@@ -47,7 +48,11 @@ interface TopicKind {
 }
 
 export default function Command() {
-  return <CoursesCommand />;
+  return (
+    <AuthenticatedCommand>
+      <CoursesCommand />
+    </AuthenticatedCommand>
+  );
 }
 
 export function CourseContent({ course }: { course: Course }) {

@@ -12,6 +12,7 @@ import { useState } from "react";
 import { formatDate, type Course } from "./lib/brightspace";
 import { CourseAcronymForm, CourseAnnouncements } from "./announcements";
 import { createAuthenticatedBrightspaceClient } from "./lib/client-factory";
+import { AuthenticatedCommand } from "./lib/rug-login-view";
 import { CourseContent } from "./course-content";
 import {
   decorateCourses,
@@ -95,7 +96,11 @@ export function CoursesCommand() {
 }
 
 export default function Command() {
-  return <CoursesCommand />;
+  return (
+    <AuthenticatedCommand>
+      <CoursesCommand />
+    </AuthenticatedCommand>
+  );
 }
 
 async function loadCourses(): Promise<CourseData> {

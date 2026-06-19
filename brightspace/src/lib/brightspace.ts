@@ -135,6 +135,13 @@ export interface Quiz {
 export interface GradeValue {
   GradeObjectIdentifier?: string | number;
   GradeObjectName?: string;
+  GradeObjectType?: number;
+  GradeObjectTypeName?: string | null;
+  Comments?: RichText | null;
+  PrivateComments?: RichText | null;
+  LastModified?: string | null;
+  LastModifiedBy?: string | number | null;
+  ReleasedDate?: string | null;
   DisplayedGrade?: string;
   PointsNumerator?: number | null;
   PointsDenominator?: number | null;

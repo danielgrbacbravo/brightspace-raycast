@@ -239,6 +239,10 @@ export async function performRugLogin(
         signature === lastCredentialSignature ? repeatedCredentials + 1 : 0;
       lastCredentialSignature = signature;
       if (repeatedCredentials >= 3) {
+        if (!usedTotp && !options.totp?.trim()) {
+          throw new TotpRequiredError();
+        }
+
         throw new Error(
           "RUG auth looped on the credential form. Username, password, or MFA state is likely invalid.",
         );

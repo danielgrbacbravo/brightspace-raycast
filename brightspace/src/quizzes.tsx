@@ -3,8 +3,17 @@ import { usePromise } from "@raycast/utils";
 import { useState } from "react";
 import { formatDate } from "./lib/brightspace";
 import { createAuthenticatedBrightspaceClient } from "./lib/client-factory";
+import { AuthenticatedCommand } from "./lib/rug-login-view";
 
 export default function Command() {
+  return (
+    <AuthenticatedCommand>
+      <QuizzesCommand />
+    </AuthenticatedCommand>
+  );
+}
+
+function QuizzesCommand() {
   const [selectedCourseId, setSelectedCourseId] = useState<string>();
 
   const { data: courses, isLoading: isLoadingCourses } = usePromise(

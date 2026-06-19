@@ -10,6 +10,7 @@ import {
   type EntityDropbox,
 } from "./lib/brightspace";
 import { createAuthenticatedBrightspaceClient } from "./lib/client-factory";
+import { AuthenticatedCommand } from "./lib/rug-login-view";
 import {
   decorateCourses,
   getCourseSettings,
@@ -51,6 +52,14 @@ interface DueGroup {
 }
 
 export default function Command() {
+  return (
+    <AuthenticatedCommand>
+      <DueNextCommand />
+    </AuthenticatedCommand>
+  );
+}
+
+function DueNextCommand() {
   const { data, isLoading } = usePromise(loadDueItems);
 
   return (
