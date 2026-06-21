@@ -15,6 +15,7 @@ import {
   TotpRequiredError,
   getSavedRugCredentials,
   isRugPasswordSaved,
+  isRugTotpSecretSaved,
   performRugLogin,
   saveRugCredentials,
   validateSavedRugSession,
@@ -25,6 +26,7 @@ interface LoginFormValues {
   username: string;
   password: string;
   totp?: string;
+  totpSecret?: string;
   saveCredentials: boolean;
 }
 
@@ -45,12 +47,41 @@ export function AuthenticatedCommand({ children }: { children: ReactNode }) {
   } = usePromise(validateSavedRugSession, [], {
     execute: !hasPreferenceAuth,
   });
+  const {
+    data: renewedSession,
+    isLoading: isRenewingSession,
+    revalidate: renewSession,
+  } = usePromise(
+    async (savedCredentials?: RugCredentials) => {
+      if (
+        hasPreferenceAuth ||
+        session ||
+        !savedCredentials?.username ||
+        !savedCredentials.password ||
+        !savedCredentials.totpSecret
+      ) {
+        return undefined;
+      }
 
-  if (hasPreferenceAuth || session) {
+      return performRugLogin({
+        tenantUrl: "https://brightspace.rug.nl",
+        username: savedCredentials.username,
+        password: savedCredentials.password,
+        totpSecret: savedCredentials.totpSecret,
+      });
+    },
+    [credentials],
+    {
+      execute: !hasPreferenceAuth && !session && Boolean(credentials),
+      onError: () => undefined,
+    },
+  );
+
+  if (hasPreferenceAuth || session || renewedSession) {
     return <>{children}</>;
   }
 
-  if (isLoadingCredentials || isLoadingSession) {
+  if (isLoadingCredentials || isLoadingSession || isRenewingSession) {
     return <Detail isLoading markdown="" />;
   }
 
@@ -74,6 +105,7 @@ export function AuthenticatedCommand({ children }: { children: ReactNode }) {
                 onLoggedIn={() => {
                   reloadCredentials();
                   reloadSession();
+                  renewSession();
                 }}
               />
             }
@@ -101,6 +133,12 @@ export function RugLoginStatus() {
     },
     [credentials?.username],
   );
+  const { data: hasSavedTotpSecret } = usePromise(
+    async (username?: string) => {
+      return username ? isRugTotpSecretSaved(username) : false;
+    },
+    [credentials?.username],
+  );
 
   const markdown = [
     "# University of Groningen Login",
@@ -115,8 +153,11 @@ export function RugLoginStatus() {
     hasSavedPassword
       ? "Password is saved in macOS Keychain."
       : "No Keychain password is saved.",
+    hasSavedTotpSecret
+      ? "2FA setup key is saved in macOS Keychain."
+      : "No 2FA setup key is saved.",
     "",
-    "Use the login form when the session expires. TOTP is only needed when RUG asks for MFA.",
+    "With a saved password and 2FA setup key, the extension can renew the session in the background.",
   ].join("\n");
 
   return (
@@ -166,12 +207,14 @@ export function LoginForm({
         username: values.username.trim(),
         password: values.password,
         totp: values.totp?.trim(),
+        totpSecret: values.totpSecret?.trim() || credentials?.totpSecret,
       });
 
       if (values.saveCredentials) {
         await saveRugCredentials({
           username: values.username.trim(),
           password: values.password,
+          totpSecret: values.totpSecret?.trim() || credentials?.totpSecret,
         });
       }
 
@@ -230,14 +273,24 @@ export function LoginForm({
         id="totp"
         title="2FA Code"
         placeholder={
-          needsTotp ? "Required for this login" : "Only when prompted"
+          needsTotp ? "Required for this login" : "Optional manual code"
         }
         error={totpError}
+      />
+      <Form.PasswordField
+        id="totpSecret"
+        title="2FA Setup Key"
+        placeholder={
+          credentials?.totpSecret
+            ? "Saved. Leave empty to keep it."
+            : "Paste authenticator setup key"
+        }
+        info="Paste the base32 setup key or otpauth:// URI from your authenticator setup. The extension uses it to generate 2FA codes locally."
       />
       <Form.Checkbox
         id="saveCredentials"
         title="Credentials"
-        label="Save password in macOS Keychain"
+        label="Save password and 2FA setup key in macOS Keychain"
         defaultValue
       />
     </Form>

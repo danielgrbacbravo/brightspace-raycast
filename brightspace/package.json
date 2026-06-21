@@ -39,10 +39,235 @@
       "description": "Show recent course announcements"
     },
     {
+      "mode": "menu-bar",
+      "name": "announcements-menu-bar",
+      "title": "Announcements",
+      "subtitle": "Brightspace",
+      "description": "Show new Brightspace announcements in the menu bar",
+      "interval": "1m",
+      "preferences": [
+        {
+          "name": "announcementRefreshInterval",
+          "title": "Refresh Interval",
+          "description": "How often the command should fetch Brightspace announcements in the background.",
+          "type": "dropdown",
+          "required": true,
+          "default": "5",
+          "data": [
+            {
+              "title": "1 minute",
+              "value": "1"
+            },
+            {
+              "title": "5 minutes",
+              "value": "5"
+            },
+            {
+              "title": "10 minutes",
+              "value": "10"
+            },
+            {
+              "title": "15 minutes",
+              "value": "15"
+            },
+            {
+              "title": "30 minutes",
+              "value": "30"
+            },
+            {
+              "title": "1 hour",
+              "value": "60"
+            }
+          ]
+        },
+        {
+          "name": "announcementTitleMode",
+          "title": "Menu Bar Title",
+          "description": "Controls the text shown next to the menu bar icon.",
+          "type": "dropdown",
+          "required": true,
+          "default": "unread-count",
+          "data": [
+            {
+              "title": "Unread Count",
+              "value": "unread-count"
+            },
+            {
+              "title": "Latest Title",
+              "value": "latest-title"
+            },
+            {
+              "title": "Course and Latest Title",
+              "value": "course-latest-title"
+            },
+            {
+              "title": "Unread Count and Latest Title",
+              "value": "count-latest-title"
+            },
+            {
+              "title": "Icon Only",
+              "value": "icon-only"
+            }
+          ]
+        },
+        {
+          "name": "announcementNotificationMode",
+          "title": "New Announcement Alerts",
+          "description": "Controls what happens when background refresh finds new announcements.",
+          "type": "dropdown",
+          "required": true,
+          "default": "toast",
+          "data": [
+            {
+              "title": "Show Toast",
+              "value": "toast"
+            },
+            {
+              "title": "Update Menu Bar Only",
+              "value": "silent"
+            }
+          ]
+        },
+        {
+          "name": "announcementIconMode",
+          "title": "Menu Bar Icon",
+          "description": "Controls the normal menu bar icon.",
+          "type": "dropdown",
+          "required": true,
+          "default": "newspaper",
+          "data": [
+            {
+              "title": "Newspaper",
+              "value": "newspaper"
+            },
+            {
+              "title": "University of Groningen Icon",
+              "value": "rug-logo"
+            },
+            {
+              "title": "Brightspace Extension Icon",
+              "value": "extension-icon"
+            },
+            {
+              "title": "Bell",
+              "value": "bell"
+            }
+          ]
+        },
+        {
+          "name": "announcementBellMode",
+          "title": "Bell Icon Behavior",
+          "description": "Controls how unread updates change the selected menu bar icon.",
+          "type": "dropdown",
+          "required": true,
+          "default": "badge",
+          "data": [
+            {
+              "title": "Badge Selected Icon When Unread",
+              "value": "badge"
+            },
+            {
+              "title": "Show Bell When Unread",
+              "value": "unread"
+            },
+            {
+              "title": "Always Use Selected Icon",
+              "value": "never"
+            },
+            {
+              "title": "Always Show Bell",
+              "value": "always"
+            }
+          ]
+        },
+        {
+          "name": "showCourseAnnouncements",
+          "title": "Announcement Types",
+          "description": "Show normal course announcements.",
+          "type": "checkbox",
+          "required": false,
+          "label": "Course announcements",
+          "default": true
+        },
+        {
+          "name": "showPinnedAnnouncements",
+          "title": "",
+          "description": "Show pinned announcements.",
+          "type": "checkbox",
+          "required": false,
+          "label": "Pinned announcements",
+          "default": true
+        },
+        {
+          "name": "showGlobalAnnouncements",
+          "title": "",
+          "description": "Show global announcements.",
+          "type": "checkbox",
+          "required": false,
+          "label": "Global announcements",
+          "default": true
+        },
+        {
+          "name": "showAttachmentAnnouncements",
+          "title": "",
+          "description": "Show announcements that include attachments.",
+          "type": "checkbox",
+          "required": false,
+          "label": "Announcements with attachments",
+          "default": true
+        },
+        {
+          "name": "showGradeUpdates",
+          "title": "",
+          "description": "Show recent visible grade updates.",
+          "type": "checkbox",
+          "required": false,
+          "label": "Grade updates",
+          "default": true
+        },
+        {
+          "name": "gradeValueMode",
+          "title": "Grade Display",
+          "description": "Controls whether menu items and alerts reveal the actual grade value.",
+          "type": "dropdown",
+          "required": true,
+          "default": "show",
+          "data": [
+            {
+              "title": "Show Grade Value",
+              "value": "show"
+            },
+            {
+              "title": "Only Show Grade Updated",
+              "value": "hide"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "mode": "view",
       "name": "due-next",
       "title": "What's Due Next",
       "description": "Show upcoming assignments and quizzes"
+    },
+    {
+      "mode": "view",
+      "name": "discussions",
+      "title": "Discussions",
+      "description": "Browse course discussion forums, topics, and posts"
+    },
+    {
+      "mode": "view",
+      "name": "checklists",
+      "title": "Checklists",
+      "description": "Browse course checklists, categories, and tasks"
+    },
+    {
+      "mode": "view",
+      "name": "continue-studying",
+      "title": "Continue Studying",
+      "description": "Open recently visited course content"
     },
     {
       "mode": "view",
@@ -106,6 +331,14 @@
       "description": "Optional override. Leave empty to discover from /d2l/api/versions/.",
       "type": "textfield",
       "required": false
+    },
+    {
+      "name": "acronymCleanupRegex",
+      "title": "Acronym Cleanup Regex",
+      "description": "Regex removed before automatic course acronym generation. Default removes square-bracket semester labels.",
+      "type": "textfield",
+      "required": false,
+      "default": "\\[[^\\]]*\\]"
     }
   ],
   "tools": [],

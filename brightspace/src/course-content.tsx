@@ -13,6 +13,7 @@ import {
   showToast,
 } from "@raycast/api";
 import { usePromise } from "@raycast/utils";
+import { useState } from "react";
 import {
   formatDate,
   type BrightspaceClient,
@@ -40,6 +41,14 @@ interface ContentSection {
   module: ContentModule;
 }
 
+type ContentMode =
+  | "overview"
+  | "recent"
+  | "bookmarked"
+  | "due"
+  | "incomplete"
+  | "all";
+
 interface TopicKind {
   key: string;
   label: string;
@@ -56,15 +65,25 @@ export default function Command() {
 }
 
 export function CourseContent({ course }: { course: Course }) {
+  const [mode, setMode] = useState<ContentMode>("overview");
   const { data, isLoading } = usePromise(
     async (courseId: number) => {
       const client = await createAuthenticatedBrightspaceClient();
-      const toc = await client.getContentToc(courseId);
-      return { client, modules: toc.Modules ?? [] };
+      const [toc, recent, bookmarks] = await Promise.all([
+        client.getContentToc(courseId),
+        client.getRecentContent(courseId).catch(() => []),
+        client.getContentBookmarks(courseId).catch(() => []),
+      ]);
+      return { client, modules: toc.Modules ?? [], recent, bookmarks };
     },
     [course.id],
   );
-  const sections = buildSections(data?.modules ?? []);
+  const sections = contentSections(
+    mode,
+    data?.modules ?? [],
+    data?.recent ?? [],
+    data?.bookmarks ?? [],
+  );
 
   return (
     <List
@@ -72,7 +91,28 @@ export function CourseContent({ course }: { course: Course }) {
       isShowingDetail
       navigationTitle={course.name}
       searchBarPlaceholder="Search content"
+      searchBarAccessory={
+        <List.Dropdown
+          tooltip="Content View"
+          value={mode}
+          onChange={(value) => setMode(value as ContentMode)}
+        >
+          <List.Dropdown.Item title="Overview" value="overview" />
+          <List.Dropdown.Item title="Recent" value="recent" />
+          <List.Dropdown.Item title="Bookmarked" value="bookmarked" />
+          <List.Dropdown.Item title="Due" value="due" />
+          <List.Dropdown.Item title="Incomplete" value="incomplete" />
+          <List.Dropdown.Item title="All Modules" value="all" />
+        </List.Dropdown>
+      }
     >
+      {!isLoading && sections.length === 0 ? (
+        <List.EmptyView
+          icon={Icon.Book}
+          title="No Content"
+          description="No topics matched this view."
+        />
+      ) : null}
       {sections.map((section) => (
         <List.Section
           key={section.id}
@@ -320,6 +360,96 @@ function buildSections(
   });
 }
 
+function contentSections(
+  mode: ContentMode,
+  modules: ContentModule[],
+  recent: ContentTopic[],
+  bookmarks: ContentTopic[],
+): ContentSection[] {
+  const allSections = buildSections(modules);
+  const allTopics = flattenSectionTopics(allSections);
+  const recentTopics = mergeTopicMetadata(recent, allTopics).slice(0, 20);
+  const bookmarkedTopics = mergeTopicMetadata(bookmarks, allTopics);
+  const dueTopics = allTopics
+    .filter(({ topic }) => Boolean(topic.DueDate))
+    .sort(compareTopicDueDates)
+    .map(({ topic }) => topic);
+  const incompleteTopics = allTopics
+    .filter(({ topic }) => isIncompleteTopic(topic))
+    .map(({ topic }) => topic);
+
+  if (mode === "all") {
+    return allSections;
+  }
+
+  if (mode === "recent") {
+    return virtualSection("recent", "Recent", recentTopics);
+  }
+
+  if (mode === "bookmarked") {
+    return virtualSection("bookmarked", "Bookmarked", bookmarkedTopics);
+  }
+
+  if (mode === "due") {
+    return virtualSection("due", "Due", dueTopics);
+  }
+
+  if (mode === "incomplete") {
+    return virtualSection("incomplete", "Incomplete", incompleteTopics);
+  }
+
+  return [
+    ...virtualSection("recent", "Continue Studying", recentTopics.slice(0, 8)),
+    ...virtualSection("bookmarked", "Bookmarked", bookmarkedTopics.slice(0, 8)),
+    ...virtualSection("due", "Due", dueTopics.slice(0, 8)),
+    ...virtualSection("incomplete", "Incomplete", incompleteTopics.slice(0, 8)),
+  ];
+}
+
+function virtualSection(
+  id: string,
+  title: string,
+  topics: ContentTopic[],
+): ContentSection[] {
+  if (topics.length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      id,
+      title,
+      depth: 0,
+      parentTitles: [],
+      topics,
+      module: { Id: 0, Title: title, Topics: topics },
+    },
+  ];
+}
+
+function flattenSectionTopics(
+  sections: ContentSection[],
+): Array<{ topic: ContentTopic; parentTitles: string[] }> {
+  return sections.flatMap((section) =>
+    section.topics.map((topic) => ({
+      topic,
+      parentTitles: [...section.parentTitles, section.title],
+    })),
+  );
+}
+
+function mergeTopicMetadata(
+  sourceTopics: ContentTopic[],
+  allTopics: Array<{ topic: ContentTopic; parentTitles: string[] }>,
+): ContentTopic[] {
+  const byId = new Map(allTopics.map(({ topic }) => [topic.Id, topic]));
+
+  return sourceTopics.map((topic) => ({
+    ...(byId.get(topic.Id) ?? {}),
+    ...topic,
+  }));
+}
+
 function topicMarkdown(topic: ContentTopic, parentTitles: string[]): string {
   const description =
     typeof topic.Description === "string"
@@ -335,6 +465,16 @@ function topicMarkdown(topic: ContentTopic, parentTitles: string[]): string {
     topic.DueDate ? `**Due:** ${formatDate(topic.DueDate)}` : "",
     topic.StartDate ? `**Starts:** ${formatDate(topic.StartDate)}` : "",
     topic.EndDate ? `**Ends:** ${formatDate(topic.EndDate)}` : "",
+    topic.DateCompleted
+      ? `**Completed:** ${formatDate(topic.DateCompleted)}`
+      : "",
+    topic.LastVisited
+      ? `**Last visited:** ${formatDate(topic.LastVisited)}`
+      : "",
+    topic.LastAccessed
+      ? `**Last accessed:** ${formatDate(topic.LastAccessed)}`
+      : "",
+    topic.IsExempt ? "**Exempt:** Yes" : "",
     topic.Url ? `**URL:** ${topic.Url}` : "",
     "",
     description || "_No inline description returned by Brightspace._",
@@ -435,7 +575,19 @@ function topicAccessories(
   const accessories: List.Item.Accessory[] = [];
 
   if (topic.DueDate) {
-    accessories.push({ text: `Due ${formatDate(topic.DueDate)}` });
+    accessories.push({
+      tag: { value: dueLabel(topic.DueDate), color: dueColor(topic.DueDate) },
+    });
+  }
+
+  if (topic.DateCompleted || topic.IsCompleted) {
+    accessories.push({ tag: { value: "Completed", color: Color.Green } });
+  } else if (isIncompleteTopic(topic)) {
+    accessories.push({ tag: { value: "Incomplete", color: Color.Yellow } });
+  }
+
+  if (topic.IsExempt) {
+    accessories.push({ tag: { value: "Exempt", color: Color.SecondaryText } });
   }
 
   if (topic.IsHidden) {
@@ -729,6 +881,15 @@ function topicMetaMarkdown(
     topic.DueDate ? `Due: ${formatDate(topic.DueDate)}` : "",
     topic.StartDate ? `Starts: ${formatDate(topic.StartDate)}` : "",
     topic.EndDate ? `Ends: ${formatDate(topic.EndDate)}` : "",
+    topic.DateCompleted ? `Completed: ${formatDate(topic.DateCompleted)}` : "",
+    topic.LastVisited ? `Last visited: ${formatDate(topic.LastVisited)}` : "",
+    topic.LastAccessed
+      ? `Last accessed: ${formatDate(topic.LastAccessed)}`
+      : "",
+    typeof topic.CompletionType !== "undefined"
+      ? `Completion type: \`${topic.CompletionType}\``
+      : "",
+    topic.IsExempt ? "Exempt: yes" : "",
     resource?.contentType ? `Content type: \`${resource.contentType}\`` : "",
     resource?.fileName ? `File: \`${escapeMarkdown(resource.fileName)}\`` : "",
     `Topic ID: \`${topic.Id}\``,
@@ -746,4 +907,77 @@ function fileNameFromUrl(url: string): string | undefined {
 
 function safeFileName(value: string): string {
   return value.replace(/[/:\\]/g, "-").trim() || "brightspace-topic";
+}
+
+function isIncompleteTopic(topic: ContentTopic): boolean {
+  if (topic.IsExempt) {
+    return false;
+  }
+
+  if (topic.IsCompleted === false) {
+    return true;
+  }
+
+  return Boolean(
+    typeof topic.CompletionType !== "undefined" &&
+    topic.CompletionType !== null &&
+    !topic.DateCompleted &&
+    !topic.IsCompleted,
+  );
+}
+
+function compareTopicDueDates(
+  a: { topic: ContentTopic },
+  b: { topic: ContentTopic },
+): number {
+  return (
+    dateTime(a.topic.DueDate) - dateTime(b.topic.DueDate) ||
+    a.topic.Title.localeCompare(b.topic.Title)
+  );
+}
+
+function dateTime(value?: string | null): number {
+  return value ? new Date(value).getTime() : Number.POSITIVE_INFINITY;
+}
+
+function dueLabel(value: string): string {
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) {
+    return value;
+  }
+
+  if (time < Date.now()) {
+    return "Overdue";
+  }
+
+  const today = startOfDay(new Date());
+  const dueDay = startOfDay(new Date(value));
+  const days = Math.floor((dueDay.getTime() - today.getTime()) / 86400000);
+
+  if (days === 0) {
+    return "Today";
+  }
+
+  if (days === 1) {
+    return "Tomorrow";
+  }
+
+  return formatDate(value) ?? value;
+}
+
+function dueColor(value: string): Color {
+  const time = new Date(value).getTime();
+  if (time < Date.now()) {
+    return Color.Red;
+  }
+
+  if (time - Date.now() <= 7 * 24 * 60 * 60 * 1000) {
+    return Color.Yellow;
+  }
+
+  return Color.Blue;
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }

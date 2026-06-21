@@ -1,7 +1,9 @@
 import { LocalStorage } from "@raycast/api";
 import type { Course } from "./brightspace";
+import { getBrightspacePreferences } from "./preferences";
 
 const SETTINGS_KEY = "course.settings";
+const DEFAULT_ACRONYM_CLEANUP_REGEX = String.raw`\[[^\]]*\]`;
 
 export interface CourseSettings {
   pinnedCourseIds: string[];
@@ -181,7 +183,7 @@ function findBlock(value: string): string | undefined {
 }
 
 function acronymFromText(value: string): string {
-  const cleaned = value
+  const cleaned = applyAcronymCleanupRegex(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\b20\d{2}\s*[-/]\s*(?:20)?\d{2}\b/g, " ")
@@ -208,6 +210,18 @@ function acronymFromText(value: string): string {
     .slice(0, 6)
     .map((token) => token[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+function applyAcronymCleanupRegex(value: string): string {
+  const pattern =
+    getBrightspacePreferences().acronymCleanupRegex?.trim() ||
+    DEFAULT_ACRONYM_CLEANUP_REGEX;
+
+  try {
+    return value.replace(new RegExp(pattern, "gi"), " ");
+  } catch {
+    return value.replace(new RegExp(DEFAULT_ACRONYM_CLEANUP_REGEX, "gi"), " ");
+  }
 }
 
 const COURSE_ACRONYM_STOP_WORDS = new Set([

@@ -6,6 +6,7 @@ export interface Preferences {
   bearerToken?: string;
   lpVersion?: string;
   leVersion?: string;
+  acronymCleanupRegex?: string;
 }
 
 export function getBrightspacePreferences(): Preferences {

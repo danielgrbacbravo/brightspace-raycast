@@ -72,6 +72,13 @@ export interface ContentTopic {
   StartDate?: string | null;
   EndDate?: string | null;
   DueDate?: string | null;
+  CompletionType?: string | number | null;
+  DateCompleted?: string | null;
+  IsCompleted?: boolean;
+  IsRequired?: boolean;
+  IsExempt?: boolean;
+  LastVisited?: string | null;
+  LastAccessed?: string | null;
 }
 
 export interface BrightspaceResource {
@@ -100,11 +107,43 @@ export interface ContentToc {
 export interface DropboxFolder {
   Id: number;
   Name: string;
+  CustomInstructions?: RichText | null;
+  Attachments?: FileAttachment[];
+  Availability?: {
+    StartDate?: string | null;
+    EndDate?: string | null;
+    StartDateAvailabilityType?: string | null;
+    EndDateAvailabilityType?: string | null;
+  } | null;
+  Assessment?: {
+    ScoreDenominator?: number | null;
+  } | null;
   DueDate?: string | null;
   StartDate?: string | null;
   EndDate?: string | null;
+  DisplayInCalendar?: boolean;
   IsHidden?: boolean;
   IsDeleted?: boolean;
+  GradeItemId?: number | null;
+  SubmissionType?: string | number | null;
+  CompletionType?: string | number | null;
+  DropboxType?: string | number | null;
+}
+
+export interface FileAttachment {
+  FileId: number;
+  FileName: string;
+  Size?: number;
+  FileSize?: number;
+  isRead?: boolean;
+  isFlagged?: boolean;
+}
+
+export interface LinkAttachment {
+  Type?: string;
+  LinkId: number;
+  LinkName: string;
+  Href?: string | null;
 }
 
 export interface DropboxSubmission {
@@ -114,10 +153,26 @@ export interface DropboxSubmission {
     DisplayName?: string;
   };
   SubmissionDate?: string | null;
+  Comment?: RichText | null;
+  Files?: FileAttachment[];
 }
 
 export interface EntityDropbox {
+  Entity?: {
+    EntityId?: number;
+    EntityType?: string;
+    DisplayName?: string;
+    Name?: string;
+  };
   Status?: string | number;
+  Feedback?: {
+    Score?: number | null;
+    Feedback?: RichText | null;
+    IsGraded?: boolean;
+    Files?: FileAttachment[];
+    Links?: LinkAttachment[];
+    GradedSymbol?: string | null;
+  } | null;
   Submissions?: DropboxSubmission[];
   CompletionDate?: string | null;
 }
@@ -224,6 +279,99 @@ export interface CourseUpdate {
   LastModifiedDate?: string | null;
 }
 
+export interface DiscussionForum {
+  ForumId: number;
+  StartDate?: string | null;
+  EndDate?: string | null;
+  Name: string;
+  Description?: RichText | null;
+  ShowDescriptionInTopics?: boolean | null;
+  AllowAnonymous?: boolean;
+  IsLocked?: boolean;
+  IsHidden?: boolean;
+  RequiresApproval?: boolean;
+  DisplayInCalendar?: boolean;
+  StartDateAvailabilityType?: string | null;
+  EndDateAvailabilityType?: string | null;
+}
+
+export interface DiscussionTopic {
+  ForumId: number;
+  TopicId: number;
+  Name: string;
+  Description?: RichText | null;
+  StartDate?: string | null;
+  EndDate?: string | null;
+  UnlockStartDate?: string | null;
+  UnlockEndDate?: string | null;
+  IsLocked?: boolean;
+  AllowAnonymousPosts?: boolean;
+  RequiresApproval?: boolean;
+  UnApprovedPostCount?: number;
+  PinnedPostCount?: number;
+  ScoringType?: string | number | null;
+  IsAutoScore?: boolean;
+  ScoreOutOf?: number | null;
+  IncludeNonScoredValues?: boolean;
+  ScoredCount?: number;
+  RatingsSum?: number;
+  RatingsCount?: number;
+  IsHidden?: boolean;
+  MustPostToParticipate?: boolean;
+  RatingType?: string | number | null;
+  ActivityId?: string | null;
+  GroupTypeId?: number | null;
+  StartDateAvailabilityType?: string | null;
+  EndDateAvailabilityType?: string | null;
+  DueDate?: string | null;
+}
+
+export interface DiscussionPost {
+  ForumId: number;
+  PostId: number;
+  TopicId: number;
+  PostingUserId?: number | null;
+  PostingUserDisplayName?: string;
+  ThreadId?: number;
+  ParentPostId?: number | null;
+  Message?: RichText | null;
+  Subject: string;
+  DatePosted?: string | null;
+  IsAnonymous?: boolean;
+  RequiresApproval?: boolean;
+  IsDeleted?: boolean;
+  LastEditedDate?: string | null;
+  LastEditedBy?: number | null;
+  CanRate?: boolean;
+  ReplyPostIds?: number[];
+  WordCount?: number;
+  AttachmentCount?: number;
+  IsRead?: boolean;
+}
+
+export interface Checklist {
+  Id: number;
+  Name: string;
+  Description?: RichText | null;
+}
+
+export interface ChecklistCategory {
+  CategoryId: number;
+  Name: string;
+  Description?: RichText | null;
+  SortOrder: number;
+}
+
+export interface ChecklistItem {
+  ChecklistItemId: number;
+  CategoryId: number;
+  ChecklistId: number;
+  Name: string;
+  Description?: RichText | null;
+  SortOrder: number;
+  DueDate?: string | null;
+}
+
 interface Page<T> {
   Items?: T[];
   Objects?: T[];
@@ -320,6 +468,20 @@ export class BrightspaceClient {
     );
   }
 
+  async getContentBookmarks(
+    courseId: number | string,
+  ): Promise<ContentTopic[]> {
+    return this.request<ContentTopic[]>(
+      `/d2l/api/le/${await this.getLeVersion()}/${courseId}/content/bookmarks`,
+    );
+  }
+
+  async getRecentContent(courseId: number | string): Promise<ContentTopic[]> {
+    return this.request<ContentTopic[]>(
+      `/d2l/api/le/${await this.getLeVersion()}/${courseId}/content/recent`,
+    );
+  }
+
   async getDropboxFolders(courseId: number | string): Promise<DropboxFolder[]> {
     return this.request<DropboxFolder[]>(
       `/d2l/api/le/${await this.getLeVersion()}/${courseId}/dropbox/folders/`,
@@ -333,6 +495,62 @@ export class BrightspaceClient {
     return this.request<EntityDropbox[]>(
       `/d2l/api/le/${await this.getLeVersion()}/${courseId}/dropbox/folders/${folderId}/submissions/mysubmissions/`,
     );
+  }
+
+  async submitMyDropboxFile(
+    courseId: number | string,
+    folderId: number | string,
+    options: {
+      fileName: string;
+      fileBytes: Uint8Array;
+      contentType?: string;
+      description?: string;
+    },
+  ): Promise<void> {
+    const boundary = `raycast-brightspace-${Date.now()}`;
+    const body = multipartMixedBody(boundary, [
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          Description: {
+            Text: options.description ?? "",
+            Html: options.description ?? "",
+          },
+        }),
+      },
+      {
+        headers: {
+          "Content-Type": options.contentType ?? "application/octet-stream",
+          "Content-Disposition": `attachment; filename="${escapeHeaderValue(options.fileName)}"`,
+        },
+        body: options.fileBytes,
+      },
+    ]);
+    const headers = this.requestHeaders("application/json");
+
+    if (!headers.Authorization && !headers.Cookie) {
+      throw new BrightspaceError(
+        "Configure a Brightspace cookie header or bearer token in extension preferences.",
+      );
+    }
+
+    const response = await fetch(
+      `${this.tenantUrl}/d2l/api/le/${await this.getLeVersion()}/${courseId}/dropbox/folders/${folderId}/submissions/mysubmissions/`,
+      {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": `multipart/mixed; boundary=${boundary}`,
+        },
+        body,
+      },
+    );
+
+    if (!response.ok) {
+      throw new BrightspaceError(await errorMessage(response), response.status);
+    }
   }
 
   async getQuizzes(courseId: number | string): Promise<Quiz[]> {
@@ -356,6 +574,90 @@ export class BrightspaceClient {
     return Array.isArray(response)
       ? response
       : (response.Objects ?? response.Items ?? []);
+  }
+
+  async getDiscussionForums(
+    courseId: number | string,
+  ): Promise<DiscussionForum[]> {
+    return this.request<DiscussionForum[]>(
+      `/d2l/api/le/${await this.getLeVersion()}/${courseId}/discussions/forums/`,
+    );
+  }
+
+  async getDiscussionTopics(
+    courseId: number | string,
+    forumId: number | string,
+  ): Promise<DiscussionTopic[]> {
+    return this.request<DiscussionTopic[]>(
+      `/d2l/api/le/${await this.getLeVersion()}/${courseId}/discussions/forums/${forumId}/topics/`,
+    );
+  }
+
+  async getDiscussionPosts(
+    courseId: number | string,
+    forumId: number | string,
+    topicId: number | string,
+    options?: {
+      pageSize?: number;
+      pageNumber?: number;
+      threadsOnly?: boolean;
+      sort?: string;
+    },
+  ): Promise<DiscussionPost[]> {
+    const params = new URLSearchParams();
+
+    if (options?.pageSize) {
+      params.set("pageSize", String(options.pageSize));
+    }
+    if (options?.pageNumber) {
+      params.set("pageNumber", String(options.pageNumber));
+    }
+    if (typeof options?.threadsOnly === "boolean") {
+      params.set("threadsOnly", String(options.threadsOnly));
+    }
+    if (options?.sort) {
+      params.set("sort", options.sort);
+    }
+
+    const query = params.size > 0 ? `?${params.toString()}` : "";
+
+    return this.request<DiscussionPost[]>(
+      `/d2l/api/le/${await this.getLeVersion()}/${courseId}/discussions/forums/${forumId}/topics/${topicId}/posts/${query}`,
+    );
+  }
+
+  async getChecklists(courseId: number | string): Promise<Checklist[]> {
+    const page = await this.request<Page<Checklist>>(
+      `/d2l/api/le/${await this.getLeVersion()}/${courseId}/checklists/`,
+    );
+
+    return page.Objects ?? page.Items ?? [];
+  }
+
+  async getChecklistCategories(
+    courseId: number | string,
+    checklistId: number | string,
+  ): Promise<ChecklistCategory[]> {
+    const page = await this.request<Page<ChecklistCategory>>(
+      `/d2l/api/le/${await this.getLeVersion()}/${courseId}/checklists/${checklistId}/categories/`,
+    );
+
+    return (page.Objects ?? page.Items ?? []).sort(
+      (a, b) => a.SortOrder - b.SortOrder || a.Name.localeCompare(b.Name),
+    );
+  }
+
+  async getChecklistItems(
+    courseId: number | string,
+    checklistId: number | string,
+  ): Promise<ChecklistItem[]> {
+    const page = await this.request<Page<ChecklistItem>>(
+      `/d2l/api/le/${await this.getLeVersion()}/${courseId}/checklists/${checklistId}/items/`,
+    );
+
+    return (page.Objects ?? page.Items ?? []).sort(
+      (a, b) => a.SortOrder - b.SortOrder || a.Name.localeCompare(b.Name),
+    );
   }
 
   async getMyDueDateEvents(options: {
@@ -648,4 +950,43 @@ function fileNameFromDisposition(
 
   const plain = /filename="?([^";]+)"?/i.exec(disposition);
   return plain?.[1];
+}
+
+function multipartMixedBody(
+  boundary: string,
+  parts: Array<{
+    headers: Record<string, string>;
+    body: string | Uint8Array;
+  }>,
+): Uint8Array {
+  const chunks: Uint8Array[] = [];
+  const encoder = new TextEncoder();
+
+  for (const part of parts) {
+    chunks.push(encoder.encode(`--${boundary}\r\n`));
+    for (const [name, value] of Object.entries(part.headers)) {
+      chunks.push(encoder.encode(`${name}: ${value}\r\n`));
+    }
+    chunks.push(encoder.encode("\r\n"));
+    chunks.push(
+      typeof part.body === "string" ? encoder.encode(part.body) : part.body,
+    );
+    chunks.push(encoder.encode("\r\n"));
+  }
+
+  chunks.push(encoder.encode(`--${boundary}--\r\n`));
+  const totalLength = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const body = new Uint8Array(totalLength);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  return body;
+}
+
+function escapeHeaderValue(value: string): string {
+  return value.replace(/["\r\n]/g, "_");
 }

@@ -14,6 +14,8 @@ import { CourseAcronymForm, CourseAnnouncements } from "./announcements";
 import { createAuthenticatedBrightspaceClient } from "./lib/client-factory";
 import { AuthenticatedCommand } from "./lib/rug-login-view";
 import { CourseContent } from "./course-content";
+import { CourseDiscussions } from "./discussions";
+import { CourseChecklists } from "./checklists";
 import {
   decorateCourses,
   getCourseSettings,
@@ -175,6 +177,16 @@ function CourseItem({
             title="Browse Announcements"
             shortcut={{ modifiers: ["cmd", "shift"], key: "a" }}
             target={<CourseAnnouncements course={course} />}
+          />
+          <Action.Push
+            title="Browse Discussions"
+            shortcut={{ modifiers: ["cmd", "shift"], key: "d" }}
+            target={<CourseDiscussions course={course} />}
+          />
+          <Action.Push
+            title="Browse Checklists"
+            shortcut={{ modifiers: ["cmd", "shift"], key: "l" }}
+            target={<CourseChecklists course={course} />}
           />
           <Action.Push
             title="Set Course Acronym"

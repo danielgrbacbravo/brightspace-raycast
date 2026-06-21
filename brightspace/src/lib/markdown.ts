@@ -22,6 +22,7 @@ export function htmlToMarkdown(html: string, baseUrl: string): HtmlRender {
     .replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, "\n##### $1\n")
     .replace(/<h4\b[^>]*>([\s\S]*?)<\/h4>/gi, "\n###### $1\n")
     .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, "\n- $1")
+    .replace(/<img\b([^>]*)>/gi, (_match, attrs: string) => imageText(attrs))
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n\n")
     .replace(/<\/div>/gi, "\n")
@@ -37,19 +38,14 @@ export function htmlToMarkdown(html: string, baseUrl: string): HtmlRender {
         return `[${escapeMarkdown(text)}](${resolveHtmlUrl(baseUrl, decodeHtml(href))})`;
       },
     )
-    .replace(/<strong\b[^>]*>([\s\S]*?)<\/strong>/gi, "**$1**")
-    .replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, "**$1**")
-    .replace(/<em\b[^>]*>([\s\S]*?)<\/em>/gi, "_$1_")
-    .replace(/<i\b[^>]*>([\s\S]*?)<\/i>/gi, "_$1_")
+    .replace(/^[\s\S]*$/, (value) => applyInlineFormatting(value))
     .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/\*\*([^\S\n]*)([\s\S]*?)([^\S\n]*)\*\*/g, "$1**$2**$3")
+    .replace(/_([^\S\n]*)([\s\S]*?)([^\S\n]*)_/g, "$1_$2_$3")
+    .replace(/\*{4,}/g, "**")
+    .replace(/_{2,}/g, "_")
     .split("\n")
-    .map((line) => line.trim())
+    .map((line) => decodeHtml(line).trim())
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -132,6 +128,7 @@ function cleanTableCell(cellHtml: string, baseUrl: string): string {
     .replace(/<br\s*\/?>/gi, " ")
     .replace(/<\/p>/gi, " ")
     .replace(/<\/div>/gi, " ")
+    .replace(/<img\b([^>]*)>/gi, (_match, attrs: string) => imageText(attrs))
     .replace(
       /<a\b([^>]*)>([\s\S]*?)<\/a>/gi,
       (_match, attrs: string, label: string) => {
@@ -142,17 +139,105 @@ function cleanTableCell(cellHtml: string, baseUrl: string): string {
           : text;
       },
     )
-    .replace(/<strong\b[^>]*>([\s\S]*?)<\/strong>/gi, "**$1**")
-    .replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, "**$1**")
-    .replace(/<em\b[^>]*>([\s\S]*?)<\/em>/gi, "_$1_")
-    .replace(/<i\b[^>]*>([\s\S]*?)<\/i>/gi, "_$1_")
+    .replace(/^[\s\S]*$/, (value) => applyInlineFormatting(value))
     .replace(/<[^>]+>/g, "")
     .replace(/\s+/g, " ")
+    .replace(/\*\*([^\S\n]*)([\s\S]*?)([^\S\n]*)\*\*/g, "$1**$2**$3")
+    .replace(/_([^\S\n]*)([\s\S]*?)([^\S\n]*)_/g, "$1_$2_$3")
+    .replace(/\*{4,}/g, "**")
+    .replace(/_{2,}/g, "_")
+    .replace(decodeHtmlPattern, decodeHtmlEntity)
     .trim();
 }
 
 function tableCell(value: string): string {
   return decodeHtml(value).replace(/\|/g, "\\|").replace(/\n+/g, "<br>").trim();
+}
+
+function imageText(attrs: string): string {
+  const alt = /alt=["']([^"']+)["']/i.exec(attrs)?.[1];
+  const title = /title=["']([^"']+)["']/i.exec(attrs)?.[1];
+  const text = decodeHtml(alt ?? title ?? "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  if (/check|selected|achieved|complete/i.test(text)) {
+    return " [selected] ";
+  }
+
+  return ` ${text} `;
+}
+
+function applyInlineFormatting(html: string): string {
+  let result = html;
+
+  for (let index = 0; index < 10; index++) {
+    const next = result.replace(
+      /<(strong|b|em|i|span)\b([^>]*)>([\s\S]*?)<\/\1>/gi,
+      (_match, tag: string, attrs: string, content: string) =>
+        formatInlineHtml(tag, attrs, content),
+    );
+
+    if (next === result) {
+      return next;
+    }
+
+    result = next;
+  }
+
+  return result;
+}
+
+function formatInlineHtml(tag: string, attrs: string, content: string): string {
+  const leadingWhitespace = /^\s*/.exec(content)?.[0] ?? "";
+  const trailingWhitespace = /\s*$/.exec(content)?.[0] ?? "";
+  const text = content.trim();
+  if (!text) {
+    return content;
+  }
+
+  const normalizedTag = tag.toLowerCase();
+  const isBold = ["strong", "b"].includes(normalizedTag) || hasBoldStyle(attrs);
+  const isItalic = ["em", "i"].includes(normalizedTag) || hasItalicStyle(attrs);
+  let formatted = text;
+
+  if (isBold && !isMarkdownWrapped(formatted, "**")) {
+    formatted = `**${formatted}**`;
+  }
+
+  if (isItalic && !isMarkdownWrapped(formatted, "_")) {
+    formatted = `_${formatted}_`;
+  }
+
+  return `${leadingWhitespace}${formatted}${trailingWhitespace}`;
+}
+
+function hasBoldStyle(attrs: string): boolean {
+  const style = styleAttribute(attrs);
+  const weight = /font-weight\s*:\s*([^;"']+)/i.exec(style)?.[1]?.trim();
+  if (!weight) {
+    return false;
+  }
+
+  return /bold|bolder/i.test(weight) || Number(weight) >= 600;
+}
+
+function hasItalicStyle(attrs: string): boolean {
+  return /font-style\s*:\s*italic/i.test(styleAttribute(attrs));
+}
+
+function styleAttribute(attrs: string): string {
+  return (
+    /style\s*=\s*"([^"]*)"/i.exec(attrs)?.[1] ??
+    /style\s*=\s*'([^']*)'/i.exec(attrs)?.[1] ??
+    ""
+  );
+}
+
+function isMarkdownWrapped(value: string, wrapper: string): boolean {
+  return value.startsWith(wrapper) && value.endsWith(wrapper);
 }
 
 function extractLinks(html: string, baseUrl: string): HtmlLink[] {
@@ -187,11 +272,28 @@ function resolveHtmlUrl(baseUrl: string, href: string): string {
 }
 
 function decodeHtml(value: string): string {
-  return value
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+  return value.replace(decodeHtmlPattern, decodeHtmlEntity);
+}
+
+const decodeHtmlPattern = /&(nbsp|amp|lt|gt|quot|#39|#x27|apos);/gi;
+
+function decodeHtmlEntity(entity: string): string {
+  switch (entity.toLowerCase()) {
+    case "&nbsp;":
+      return " ";
+    case "&amp;":
+      return "&";
+    case "&lt;":
+      return "<";
+    case "&gt;":
+      return ">";
+    case "&quot;":
+      return '"';
+    case "&#39;":
+    case "&#x27;":
+    case "&apos;":
+      return "'";
+    default:
+      return entity;
+  }
 }

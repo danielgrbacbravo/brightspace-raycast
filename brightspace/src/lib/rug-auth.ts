@@ -9,10 +9,12 @@ import {
   readPassword,
   savePassword,
 } from "./keychain";
+import { generateTotp, normalizeTotpSecret } from "./totp";
 
 const SESSION_KEY = "rug.session";
 const USERNAME_KEY = "rug.username";
 const KEYCHAIN_SERVICE = "brightspace-raycast-rug";
+const TOTP_KEYCHAIN_SERVICE = "brightspace-raycast-rug-totp";
 const MAX_AUTH_STEPS = 40;
 const DEFAULT_TENANT_URL = "https://brightspace.rug.nl";
 
@@ -56,6 +58,7 @@ interface HtmlForm {
 export interface RugCredentials {
   username: string;
   password: string;
+  totpSecret?: string;
 }
 
 export interface RugSession {
@@ -78,8 +81,11 @@ export async function getSavedRugCredentials(): Promise<
     return undefined;
   }
 
-  const password = await readSavedPassword(username);
-  return { username, password: password ?? "" };
+  const [password, totpSecret] = await Promise.all([
+    readSavedPassword(username),
+    readSavedTotpSecret(username),
+  ]);
+  return { username, password: password ?? "", totpSecret };
 }
 
 export async function saveRugCredentials(
@@ -91,10 +97,22 @@ export async function saveRugCredentials(
     credentials.username,
     credentials.password,
   );
+
+  if (credentials.totpSecret?.trim()) {
+    await savePassword(
+      TOTP_KEYCHAIN_SERVICE,
+      credentials.username,
+      normalizeTotpSecret(credentials.totpSecret),
+    );
+  }
 }
 
 export async function isRugPasswordSaved(username: string): Promise<boolean> {
   return Boolean(await readSavedPassword(username));
+}
+
+export async function isRugTotpSecretSaved(username: string): Promise<boolean> {
+  return Boolean(await readSavedTotpSecret(username));
 }
 
 async function readSavedPassword(
@@ -102,6 +120,20 @@ async function readSavedPassword(
 ): Promise<string | undefined> {
   try {
     return await readPassword(KEYCHAIN_SERVICE, username);
+  } catch (error) {
+    if (error instanceof KeychainUnavailableError) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function readSavedTotpSecret(
+  username: string,
+): Promise<string | undefined> {
+  try {
+    return await readPassword(TOTP_KEYCHAIN_SERVICE, username);
   } catch (error) {
     if (error instanceof KeychainUnavailableError) {
       return undefined;
@@ -213,12 +245,13 @@ export async function performRugLogin(
       inputs.option = "credential";
       stage = "credentials";
     } else if (mfaFields.length > 0) {
-      if (!usedTotp && !options.totp?.trim()) {
+      const totp = options.totp?.trim() || generatedTotp(options.totpSecret);
+      if (!totp) {
         throw new TotpRequiredError();
       }
 
       for (const field of mfaFields) {
-        inputs[field] = options.totp?.trim() ?? "";
+        inputs[field] = totp;
       }
       inputs.option = "credential";
       stage = "mfa";
@@ -239,7 +272,7 @@ export async function performRugLogin(
         signature === lastCredentialSignature ? repeatedCredentials + 1 : 0;
       lastCredentialSignature = signature;
       if (repeatedCredentials >= 3) {
-        if (!usedTotp && !options.totp?.trim()) {
+        if (!usedTotp && !options.totp?.trim() && !options.totpSecret?.trim()) {
           throw new TotpRequiredError();
         }
 
@@ -288,6 +321,10 @@ export async function performRugLogin(
   }
 
   throw new Error("RUG login sequence did not complete.");
+}
+
+function generatedTotp(secret: string | undefined): string {
+  return secret?.trim() ? generateTotp(secret) : "";
 }
 
 async function validateLoggedInSession(
