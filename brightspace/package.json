@@ -339,6 +339,51 @@
       "type": "textfield",
       "required": false,
       "default": "\\[[^\\]]*\\]"
+    },
+    {
+      "name": "showContentDueTags",
+      "title": "Content Tags",
+      "description": "Show due date tags in course content lists.",
+      "type": "checkbox",
+      "required": false,
+      "label": "Due dates",
+      "default": true
+    },
+    {
+      "name": "showContentCompletionTags",
+      "title": "",
+      "description": "Show completed and incomplete tags in course content lists.",
+      "type": "checkbox",
+      "required": false,
+      "label": "Completion state",
+      "default": false
+    },
+    {
+      "name": "showContentExemptionTags",
+      "title": "",
+      "description": "Show exempt tags in course content lists.",
+      "type": "checkbox",
+      "required": false,
+      "label": "Exemptions",
+      "default": true
+    },
+    {
+      "name": "showContentAvailabilityTags",
+      "title": "",
+      "description": "Show hidden and locked tags in course content lists.",
+      "type": "checkbox",
+      "required": false,
+      "label": "Hidden and locked",
+      "default": true
+    },
+    {
+      "name": "showContentTypeTags",
+      "title": "",
+      "description": "Show content type tags like PDF, Page, Stream, and External.",
+      "type": "checkbox",
+      "required": false,
+      "label": "Content type",
+      "default": false
     }
   ],
   "tools": [],

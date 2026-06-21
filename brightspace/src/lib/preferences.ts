@@ -7,6 +7,11 @@ export interface Preferences {
   lpVersion?: string;
   leVersion?: string;
   acronymCleanupRegex?: string;
+  showContentDueTags?: boolean;
+  showContentCompletionTags?: boolean;
+  showContentExemptionTags?: boolean;
+  showContentAvailabilityTags?: boolean;
+  showContentTypeTags?: boolean;
 }
 
 export function getBrightspacePreferences(): Preferences {

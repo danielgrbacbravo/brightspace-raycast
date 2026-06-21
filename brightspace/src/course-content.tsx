@@ -31,6 +31,7 @@ import {
 import { createAuthenticatedBrightspaceClient } from "./lib/client-factory";
 import { CoursesCommand } from "./my-courses";
 import { AuthenticatedCommand } from "./lib/rug-login-view";
+import { getBrightspacePreferences } from "./lib/preferences";
 
 interface ContentSection {
   id: string;
@@ -56,6 +57,14 @@ interface TopicKind {
   canDownload: boolean;
 }
 
+interface ContentTagPreferences {
+  showDue: boolean;
+  showCompletion: boolean;
+  showExemption: boolean;
+  showAvailability: boolean;
+  showType: boolean;
+}
+
 export default function Command() {
   return (
     <AuthenticatedCommand>
@@ -66,6 +75,7 @@ export default function Command() {
 
 export function CourseContent({ course }: { course: Course }) {
   const [mode, setMode] = useState<ContentMode>("overview");
+  const tagPreferences = contentTagPreferences();
   const { data, isLoading } = usePromise(
     async (courseId: number) => {
       const client = await createAuthenticatedBrightspaceClient();
@@ -129,6 +139,7 @@ export function CourseContent({ course }: { course: Course }) {
               topic={topic}
               parentTitles={[...section.parentTitles, section.title]}
               client={data?.client}
+              tagPreferences={tagPreferences}
             />
           ))}
         </List.Section>
@@ -141,10 +152,12 @@ function TopicItem({
   topic,
   parentTitles,
   client,
+  tagPreferences,
 }: {
   topic: ContentTopic;
   parentTitles: string[];
   client?: BrightspaceClient;
+  tagPreferences: ContentTagPreferences;
 }) {
   const topicUrl = topic.Url ? client?.resolveUrl(topic.Url) : undefined;
 
@@ -156,7 +169,7 @@ function TopicItem({
       return client.resolveTopicType(url);
     },
     [topic.Url],
-    { execute: Boolean(client && topic.Url) },
+    { execute: Boolean(tagPreferences.showType && client && topic.Url) },
   );
 
   const kind = topicKind(
@@ -176,7 +189,7 @@ function TopicItem({
   return (
     <List.Item
       title={topic.Title}
-      accessories={topicAccessories(topic, kind)}
+      accessories={topicAccessories(topic, kind, tagPreferences)}
       detail={
         <TopicDetail
           topic={topic}
@@ -571,36 +584,54 @@ function resourceMarkdown(
 function topicAccessories(
   topic: ContentTopic,
   kind: TopicKind,
+  preferences: ContentTagPreferences,
 ): List.Item.Accessory[] {
   const accessories: List.Item.Accessory[] = [];
 
-  if (topic.DueDate) {
+  if (preferences.showDue && topic.DueDate) {
     accessories.push({
       tag: { value: dueLabel(topic.DueDate), color: dueColor(topic.DueDate) },
     });
   }
 
-  if (topic.DateCompleted || topic.IsCompleted) {
+  if (
+    preferences.showCompletion &&
+    (topic.DateCompleted || topic.IsCompleted)
+  ) {
     accessories.push({ tag: { value: "Completed", color: Color.Green } });
-  } else if (isIncompleteTopic(topic)) {
+  } else if (preferences.showCompletion && isIncompleteTopic(topic)) {
     accessories.push({ tag: { value: "Incomplete", color: Color.Yellow } });
   }
 
-  if (topic.IsExempt) {
+  if (preferences.showExemption && topic.IsExempt) {
     accessories.push({ tag: { value: "Exempt", color: Color.SecondaryText } });
   }
 
-  if (topic.IsHidden) {
+  if (preferences.showAvailability && topic.IsHidden) {
     accessories.push({ tag: { value: "Hidden", color: Color.Yellow } });
   }
 
-  if (topic.IsLocked) {
+  if (preferences.showAvailability && topic.IsLocked) {
     accessories.push({ tag: { value: "Locked", color: Color.Red } });
   }
 
-  accessories.push({ tag: { value: kind.label, color: kind.color } });
+  if (preferences.showType) {
+    accessories.push({ tag: { value: kind.label, color: kind.color } });
+  }
 
   return accessories;
+}
+
+function contentTagPreferences(): ContentTagPreferences {
+  const preferences = getBrightspacePreferences();
+
+  return {
+    showDue: preferences.showContentDueTags ?? true,
+    showCompletion: preferences.showContentCompletionTags ?? false,
+    showExemption: preferences.showContentExemptionTags ?? true,
+    showAvailability: preferences.showContentAvailabilityTags ?? true,
+    showType: preferences.showContentTypeTags ?? false,
+  };
 }
 
 async function downloadTopic(
